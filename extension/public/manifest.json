@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "Session Memory",
+  "version": "0.1.0",
+  "description": "AI-powered contextual session memory - never lose your work context again",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "activeTab",
+    "storage",
+    "alarms",
+    "scripting",
+    "clipboardRead"
+  ],
+  "host_permissions": [
+    "http://localhost:3712/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "save-session": {
+      "suggested_key": { "default": "Ctrl+Shift+S" },
+      "description": "Save current session"
+    },
+    "toggle-sidebar": {
+      "suggested_key": { "default": "Ctrl+Shift+L" },
+      "description": "Toggle notes sidebar"
+    },
+    "toggle-command-menu": {
+      "suggested_key": { "default": "Ctrl+Shift+K" },
+      "description": "Toggle command menu"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

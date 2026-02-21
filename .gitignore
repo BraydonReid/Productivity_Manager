@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+.claude/
+settings.json
+.DS_Store
+Thumbs.db
+extension/dist/
+server/dist/

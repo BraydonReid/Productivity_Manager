@@ -1,0 +1,14 @@
+{
+  "name": "productivity-optimiser",
+  "private": true,
+  "workspaces": ["extension", "server"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w extension\"",
+    "build": "npm run build -w extension && npm run build -w server",
+    "dev:server": "npm run dev -w server",
+    "dev:extension": "npm run dev -w extension"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
