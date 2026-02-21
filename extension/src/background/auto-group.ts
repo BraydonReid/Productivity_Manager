@@ -27,12 +27,11 @@ export async function autoGroupByDomain(): Promise<TabGroupResult[]> {
     }
   }
 
-  // Only group domains with 2+ tabs
   const groups: TabGroupResult[] = [];
   let colorIndex = 0;
 
   for (const [domain, tabIds] of domainMap) {
-    if (tabIds.length < 2) continue;
+    if (tabIds.length < 1) continue;
     const color = COLOR_ROTATION[colorIndex % COLOR_ROTATION.length];
     colorIndex++;
     // Shorten domain for label (remove TLD)
@@ -91,7 +90,7 @@ export async function autoGroupByAI(): Promise<TabGroupResult[]> {
 
     for (const cluster of clusters) {
       const tabIds = (cluster.tabIds as number[]).filter((id) => validTabIds.has(id));
-      if (tabIds.length < 2) continue;
+      if (tabIds.length < 1) continue;
 
       const color = COLOR_ROTATION[colorIndex % COLOR_ROTATION.length];
       colorIndex++;

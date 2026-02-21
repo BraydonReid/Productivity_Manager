@@ -46,11 +46,13 @@ export default function SessionDetail() {
   async function handleGenerateNextSteps() {
     if (!id) return;
     setGeneratingSteps(true);
-    const res = await apiClient.post<NextStep[]>('/ai/next-steps', {
+    const res = await apiClient.post<{ steps: NextStep[] }>('/ai/next-steps', {
       sessionId: id,
     });
     if (res.success && res.data) {
-      setNextSteps(res.data);
+      setNextSteps(res.data.steps || []);
+    } else if (!res.success) {
+      console.error('Next steps error:', res.error);
     }
     setGeneratingSteps(false);
   }
