@@ -1,6 +1,6 @@
 // Update SERVER_URL after Railway deployment:
 // export const SERVER_URL = 'https://YOUR_APP.up.railway.app';
-export const SERVER_URL = 'http://localhost:3712';
+export const SERVER_URL = 'https://session-memory-server-production.up.railway.app';
 export const API_BASE = `${SERVER_URL}/api`;
 
 export const SYNC_INTERVAL_MINUTES = 0.5; // 30 seconds
