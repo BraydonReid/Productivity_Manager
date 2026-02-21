@@ -64,9 +64,13 @@ export async function autoGroupByAI(): Promise<TabGroupResult[]> {
   );
 
   try {
+    const { authToken } = await chrome.storage.local.get('authToken');
     const res = await fetch(`${API_BASE}/ai/cluster-tabs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
       body: JSON.stringify({
         tabs: analyzableTabs.map((t) => ({
           id: t.id,
