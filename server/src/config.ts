@@ -8,7 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, '../../.env') });
 
 export const config = {
-  port: parseInt(process.env.SERVER_PORT || '3712', 10),
+  port: parseInt(process.env.PORT || process.env.SERVER_PORT || '3712', 10),
   dbPath: process.env.DB_PATH || resolve(__dirname, '../data.db'),
   openaiApiKey: process.env.OPENAI_API_KEY || '',
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
