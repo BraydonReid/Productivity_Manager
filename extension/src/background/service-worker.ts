@@ -8,6 +8,8 @@ import {
   saveSession,
   getCurrentSession,
   updateScrollPosition,
+  getSessionNamingInfo,
+  applyAIName,
 } from './session-tracker';
 import { checkClipboard } from './clipboard-monitor';
 import {
@@ -90,6 +92,20 @@ chrome.tabs.onCreated.addListener((tab) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === ALARM_NAMES.SYNC_TO_SERVER) {
     await syncToServer();
+    // Auto-name the session with AI once it has enough tabs
+    const namingInfo = getSessionNamingInfo();
+    if (namingInfo && !namingInfo.hasBeenNamed && namingInfo.tabCount >= 3) {
+      try {
+        const res = await authedFetch(`${API_BASE}/ai/name-session`, {
+          method: 'POST',
+          body: JSON.stringify({ sessionId: namingInfo.id }),
+        });
+        if (res.ok) {
+          const { name } = await res.json();
+          if (name) await applyAIName(name);
+        }
+      } catch {}
+    }
   } else if (alarm.name === ALARM_NAMES.CLIPBOARD_CHECK) {
     const stored = await chrome.storage.local.get(STORAGE_KEYS.CURRENT_SESSION_ID);
     await checkClipboard(stored[STORAGE_KEYS.CURRENT_SESSION_ID] || null);

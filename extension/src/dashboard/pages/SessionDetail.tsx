@@ -16,6 +16,8 @@ export default function SessionDetail() {
   const [loading, setLoading] = useState(true);
   const [nextSteps, setNextSteps] = useState<NextStep[]>([]);
   const [generatingSteps, setGeneratingSteps] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -30,8 +32,23 @@ export default function SessionDetail() {
     );
     if (res.success && res.data) {
       setSession(res.data);
+      setNameInput(res.data.name);
     }
     setLoading(false);
+  }
+
+  async function handleSaveName() {
+    if (!id || !session || nameInput.trim() === session.name) {
+      setEditingName(false);
+      return;
+    }
+    const trimmed = nameInput.trim();
+    if (!trimmed) { setEditingName(false); return; }
+    const res = await apiClient.put(`/sessions/${id}`, { name: trimmed });
+    if (res.success) {
+      setSession((prev) => prev ? { ...prev, name: trimmed } : prev);
+    }
+    setEditingName(false);
   }
 
   async function loadNextSteps(sessionId: string) {
@@ -101,8 +118,42 @@ export default function SessionDetail() {
       </button>
 
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">{session.name}</h2>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 group flex-1 min-w-0 mr-4">
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onBlur={handleSaveName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveName();
+                if (e.key === 'Escape') { setNameInput(session.name); setEditingName(false); }
+              }}
+              className="text-2xl font-bold bg-transparent border-b-2 border-blue-500 focus:outline-none w-full"
+            />
+          ) : (
+            <h2
+              className="text-2xl font-bold cursor-pointer truncate"
+              onClick={() => setEditingName(true)}
+              title="Click to rename"
+            >
+              {session.name}
+            </h2>
+          )}
+          {!editingName && (
+            <button
+              onClick={() => setEditingName(true)}
+              className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-gray-300 transition-opacity flex-shrink-0"
+              title="Rename session"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
           <button
             onClick={handleSummarize}
             className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-sm"

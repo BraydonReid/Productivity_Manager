@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { apiClient } from '../../shared/api-client';
 import type { Session } from '../../shared/types';
 import SessionCard from '../components/SessionCard';
@@ -18,6 +17,13 @@ export default function SessionList() {
       setSessions(res.data);
     }
     setLoading(false);
+  }
+
+  async function handleRename(sessionId: string, name: string) {
+    const res = await apiClient.put(`/sessions/${sessionId}`, { name });
+    if (res.success) {
+      setSessions((prev) => prev.map((s) => s.id === sessionId ? { ...s, name } : s));
+    }
   }
 
   if (loading) {
@@ -40,9 +46,11 @@ export default function SessionList() {
       <h2 className="text-2xl font-bold mb-4">Sessions</h2>
       <div className="grid gap-3">
         {sessions.map((session) => (
-          <Link key={session.id} to={`/session/${session.id}`}>
-            <SessionCard session={session} />
-          </Link>
+          <SessionCard
+            key={session.id}
+            session={session}
+            onRename={(name) => handleRename(session.id, name)}
+          />
         ))}
       </div>
     </div>

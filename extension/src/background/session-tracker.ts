@@ -23,6 +23,7 @@ interface TrackedTab {
 interface SessionData {
   id: string;
   name: string;
+  hasBeenNamed: boolean;
   createdAt: string;
   tabs: Map<number, TrackedTab>;
   totalActiveTime: number;
@@ -50,6 +51,7 @@ export async function initSession(): Promise<void> {
         ...raw,
         tabs: new Map(Object.entries(raw.tabs || {}).map(([k, v]) => [Number(k), v as TrackedTab])),
         uniqueDomains: new Set(raw.uniqueDomains || []),
+        hasBeenNamed: raw.hasBeenNamed ?? !raw.name?.startsWith('Session '),
         contextSwitchCount: raw.contextSwitchCount || 0,
         lastActiveDomain: raw.lastActiveDomain || null,
         deepWorkStart: raw.deepWorkStart || null,
@@ -71,6 +73,7 @@ async function createNewSession(name?: string): Promise<SessionData> {
   currentSession = {
     id,
     name: name || `Session ${new Date().toLocaleString()}`,
+    hasBeenNamed: !!name,
     createdAt: now,
     tabs: new Map(),
     totalActiveTime: 0,
@@ -326,6 +329,22 @@ export async function saveSession(name?: string): Promise<Session | null> {
     totalActiveTime: currentSession.totalActiveTime,
     tabCount: currentSession.tabs.size,
   };
+}
+
+export function getSessionNamingInfo(): { id: string; tabCount: number; hasBeenNamed: boolean } | null {
+  if (!currentSession) return null;
+  return {
+    id: currentSession.id,
+    tabCount: currentSession.tabs.size,
+    hasBeenNamed: currentSession.hasBeenNamed,
+  };
+}
+
+export async function applyAIName(name: string): Promise<void> {
+  if (!currentSession) return;
+  currentSession.name = name;
+  currentSession.hasBeenNamed = true;
+  await persistLocally();
 }
 
 export function getCurrentSession(): Session | null {
