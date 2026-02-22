@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { sendMessage } from '../shared/messaging';
+import { getTheme, applyTheme } from '../shared/theme';
 import type { Session } from '../shared/types';
 import ActiveSession from './components/ActiveSession';
 import SessionControls from './components/SessionControls';
@@ -22,12 +23,10 @@ function AppContent() {
 
   async function loadCurrentSession() {
     try {
-      const session = await sendMessage<Session | null>({
-        type: 'GET_CURRENT_SESSION',
-      });
+      const session = await sendMessage<Session | null>({ type: 'GET_CURRENT_SESSION' });
       setCurrentSession(session);
-    } catch (err) {
-      console.error('Failed to load session:', err);
+    } catch {
+      // silent
     } finally {
       setLoading(false);
     }
@@ -75,68 +74,96 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="w-80 p-4 text-center text-gray-500">Loading...</div>
+      <div className="w-80 h-40 flex items-center justify-center bg-gray-900">
+        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
   return (
-    <div className="w-80 bg-gray-900 text-white min-h-[400px] font-sans">
-      <header className="p-3 border-b border-gray-700">
-        <h1 className="text-lg font-semibold">Session Memory</h1>
+    <div className="w-80 bg-gray-900 text-white font-sans">
+      {/* Header */}
+      <header className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-blue-600 rounded-md flex items-center justify-center">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+            </svg>
+          </div>
+          <h1 className="text-sm font-semibold">Session Memory</h1>
+        </div>
+        <button
+          onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('src/dashboard/index.html') })}
+          className="text-xs text-gray-400 hover:text-blue-400 flex items-center gap-1 transition-colors"
+          title="Open Dashboard"
+        >
+          Dashboard
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+        </button>
       </header>
-      <div className="p-3 space-y-3">
+
+      <div className="p-3 space-y-2.5">
+        {/* Current Session */}
         <ActiveSession session={currentSession} />
+
+        {/* Focus Mode */}
         <FocusMode />
 
         {/* Recent Sessions */}
         <RecentSessions currentSessionId={currentSession?.id} />
 
-        {/* Auto Group */}
+        {/* Tab Grouping */}
         <AutoGroup />
 
-        {/* Analyze Section */}
-        <div className="bg-gray-800 rounded-lg p-3">
-          <h3 className="text-sm font-medium text-gray-300 mb-2">AI Page Analysis</h3>
+        {/* AI Analysis */}
+        <div className="bg-gray-800 rounded-xl p-3">
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className="w-5 h-5 bg-purple-600/20 rounded flex items-center justify-center">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 8v4l3 3"/><path d="M16 2l2 2-6 6"/>
+              </svg>
+            </div>
+            <h3 className="text-xs font-semibold text-gray-200">AI Page Analysis</h3>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={handleAnalyzePage}
               disabled={analyzing || analyzingAll}
-              className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-xs font-medium transition-colors"
+              className="flex-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors"
             >
-              {analyzing ? 'Analyzing...' : 'Analyze Page'}
+              {analyzing ? 'Analyzing…' : 'Analyze Page'}
             </button>
             <button
               onClick={handleAnalyzeAll}
               disabled={analyzing || analyzingAll}
-              className="flex-1 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-xs font-medium transition-colors"
+              className="flex-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors"
             >
-              {analyzingAll ? 'Analyzing All...' : 'Analyze All Tabs'}
+              {analyzingAll ? 'Analyzing…' : 'Analyze All'}
             </button>
           </div>
           {analyzeStatus && (
-            <p className="text-xs text-gray-400 mt-2">{analyzeStatus}</p>
+            <p className="text-xs text-gray-400 mt-2 text-center">{analyzeStatus}</p>
           )}
         </div>
 
         {/* Page Chat */}
         <PageChat />
 
-        <SessionControls
-          session={currentSession}
-          onSessionUpdate={loadCurrentSession}
-        />
-        <button
-          onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('src/dashboard/index.html') })}
-          className="w-full text-sm text-blue-400 hover:text-blue-300 py-1"
-        >
-          Open Dashboard
-        </button>
+        {/* Session Controls */}
+        <SessionControls session={currentSession} onSessionUpdate={loadCurrentSession} />
       </div>
     </div>
   );
 }
 
 export default function App() {
+  useEffect(() => {
+    getTheme().then(applyTheme);
+  }, []);
+
   return (
     <AuthGate>
       <AppContent />

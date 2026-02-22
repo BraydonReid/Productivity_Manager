@@ -27,14 +27,23 @@ export default function SessionList() {
   }
 
   if (loading) {
-    return <div className="text-gray-500">Loading sessions...</div>;
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   if (sessions.length === 0) {
     return (
       <div className="text-center py-20">
-        <h2 className="text-xl text-gray-400">No sessions yet</h2>
-        <p className="text-gray-500 mt-2">
+        <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400 dark:text-gray-500">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+          </svg>
+        </div>
+        <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">No sessions yet</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-500 mt-1 max-w-xs mx-auto">
           Start browsing and save your first session from the extension popup.
         </p>
       </div>
@@ -43,8 +52,11 @@ export default function SessionList() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-4">Sessions</h2>
-      <div className="grid gap-3">
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sessions</h2>
+        <span className="text-sm text-gray-500 dark:text-gray-400">{sessions.length} total</span>
+      </div>
+      <div className="grid gap-2.5">
         {sessions.map((session) => (
           <SessionCard
             key={session.id}

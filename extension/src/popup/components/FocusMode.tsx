@@ -9,9 +9,7 @@ export default function FocusMode() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
 
-  useEffect(() => {
-    loadStatus();
-  }, []);
+  useEffect(() => { loadStatus(); }, []);
 
   async function loadStatus() {
     try {
@@ -32,9 +30,7 @@ export default function FocusMode() {
         payload: { goal: goal.trim(), durationMinutes: duration },
       });
       setStatus(s);
-    } catch (err) {
-      console.error('Failed to start focus:', err);
-    }
+    } catch {}
     setStarting(false);
   }
 
@@ -43,36 +39,36 @@ export default function FocusMode() {
       await sendMessage({ type: 'END_FOCUS' });
       setStatus(null);
       setGoal('');
-    } catch (err) {
-      console.error('Failed to end focus:', err);
-    }
+    } catch {}
   }
 
   if (loading) return null;
 
-  // Active focus session
   if (status?.isActive) {
     const remaining = Math.max(0, status.targetDuration - status.elapsedMinutes);
     const progress = Math.min(100, (status.elapsedMinutes / status.targetDuration) * 100);
 
     return (
-      <div className="bg-purple-900/30 border border-purple-700 rounded-lg p-3">
+      <div className="bg-purple-900/25 border border-purple-700/60 rounded-xl p-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-purple-300">Focus Mode</span>
-          <span className="text-xs text-purple-400">{remaining}m left</span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" />
+            <span className="text-xs font-semibold text-purple-300">Focus Mode Active</span>
+          </div>
+          <span className="text-xs text-purple-400 tabular-nums">{remaining}m left</span>
         </div>
-        <p className="text-sm font-medium mb-2">{status.goal}</p>
+        <p className="text-sm font-medium text-white mb-2.5 truncate">{status.goal}</p>
         <div className="w-full bg-gray-800 rounded-full h-1.5 mb-2">
           <div
-            className="bg-purple-500 rounded-full h-1.5 transition-all"
+            className="bg-purple-500 rounded-full h-1.5 transition-all duration-1000"
             style={{ width: `${progress}%` }}
           />
         </div>
-        <div className="flex items-center justify-between text-xs text-gray-400">
-          <span>{status.distractionsBlocked} distractions blocked</span>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-400">{status.distractionsBlocked} blocked</span>
           <button
             onClick={handleEnd}
-            className="text-red-400 hover:text-red-300"
+            className="text-red-400 hover:text-red-300 font-medium transition-colors"
           >
             End Focus
           </button>
@@ -81,22 +77,29 @@ export default function FocusMode() {
     );
   }
 
-  // Start focus form
   return (
-    <div className="bg-gray-800 rounded-lg p-3">
-      <p className="text-xs font-medium text-gray-400 mb-2">Focus Mode</p>
+    <div className="bg-gray-800 rounded-xl p-3">
+      <div className="flex items-center gap-2 mb-2.5">
+        <div className="w-5 h-5 bg-purple-600/20 rounded flex items-center justify-center">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+          </svg>
+        </div>
+        <h3 className="text-xs font-semibold text-gray-200">Focus Mode</h3>
+      </div>
       <input
         type="text"
         value={goal}
         onChange={(e) => setGoal(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && handleStart()}
         placeholder="What are you focusing on?"
-        className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 mb-2"
+        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors mb-2"
       />
       <div className="flex items-center gap-2">
         <select
           value={duration}
           onChange={(e) => setDuration(Number(e.target.value))}
-          className="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white flex-1"
+          className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white flex-shrink-0 focus:outline-none focus:border-purple-500 transition-colors"
         >
           <option value={15}>15 min</option>
           <option value={25}>25 min</option>
@@ -107,9 +110,9 @@ export default function FocusMode() {
         <button
           onClick={handleStart}
           disabled={starting || !goal.trim()}
-          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded text-sm font-medium flex-1"
+          className="flex-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-colors"
         >
-          {starting ? 'Starting...' : 'Start Focus'}
+          {starting ? '…' : 'Start Focus'}
         </button>
       </div>
     </div>

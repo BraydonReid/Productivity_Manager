@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { getTheme, applyTheme } from '../shared/theme';
 import SessionList from './pages/SessionList';
 import SessionDetail from './pages/SessionDetail';
 import SearchResults from './pages/SearchResults';
@@ -17,6 +18,9 @@ function AppContent() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // Apply saved theme immediately to avoid flash
+    getTheme().then(applyTheme);
+
     async function checkAuth() {
       const { authToken, hasCompletedOnboarding } = await chrome.storage.local.get([
         'authToken',
@@ -27,9 +31,7 @@ function AppContent() {
       const isOnboardingPage = location.pathname === '/onboarding';
 
       if (!authToken) {
-        if (!isLoginPage) {
-          navigate('/login', { replace: true });
-        }
+        if (!isLoginPage) navigate('/login', { replace: true });
         setReady(true);
         return;
       }
@@ -51,7 +53,7 @@ function AppContent() {
   const isFullPage = location.pathname === '/onboarding' || location.pathname === '/login';
 
   return (
-    <div className="flex h-screen bg-gray-950 text-white">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white transition-colors">
       {!isFullPage && <Sidebar />}
       <main className={`flex-1 overflow-y-auto${isFullPage ? '' : ' p-6'}`}>
         <Routes>
