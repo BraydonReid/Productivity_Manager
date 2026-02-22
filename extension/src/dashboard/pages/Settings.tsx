@@ -92,35 +92,6 @@ export default function Settings() {
         </p>
       </section>
 
-      {/* Data storage info */}
-      <section>
-        <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Data Storage</h3>
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl divide-y divide-gray-100 dark:divide-gray-800">
-          <div className="px-4 py-3 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-              </svg>
-            </div>
-            <div>
-              <div className="text-sm font-medium text-gray-900 dark:text-white">Cloud (Railway)</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Sessions, tabs, notes, journals, focus history — permanently stored in SQLite on the server.</div>
-            </div>
-          </div>
-          <div className="px-4 py-3 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center shrink-0 mt-0.5">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-              </svg>
-            </div>
-            <div>
-              <div className="text-sm font-medium text-gray-900 dark:text-white">Browser (Local)</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auth token, active session state, theme preference — stored in <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">chrome.storage.local</code>. Cleared if you uninstall.</div>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

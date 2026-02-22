@@ -323,20 +323,101 @@ export default function SessionDetail() {
           </h3>
           <div className="space-y-2">
             {session.clipboardEntries.map((entry) => (
-              <div
-                key={entry.id}
-                className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-3"
-              >
-                <p className="text-sm font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap line-clamp-3 leading-relaxed">
-                  {entry.content}
-                </p>
-                {entry.summary && (
-                  <p className="text-xs text-purple-600 dark:text-purple-300 mt-2">{entry.summary}</p>
-                )}
-              </div>
+              <ClipboardCard key={entry.id} entry={entry} />
             ))}
           </div>
         </section>
+      )}
+    </div>
+  );
+}
+
+function ClipboardCard({ entry }: { entry: { id: string; content: string; summary?: string | null; sourceUrl?: string | null; capturedAt: string; contentType: string } }) {
+  const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const isLong = entry.content.length > 200;
+  const displayContent = isLong && !expanded ? entry.content.substring(0, 200) + '…' : entry.content;
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(entry.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {}
+  }
+
+  let sourceHost = '';
+  if (entry.sourceUrl) {
+    try { sourceHost = new URL(entry.sourceUrl).hostname.replace('www.', ''); } catch {}
+  }
+
+  const typeBadge: Record<string, { label: string; cls: string }> = {
+    code: { label: 'Code', cls: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
+    url: { label: 'URL', cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' },
+    text: { label: 'Text', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400' },
+  };
+  const badge = typeBadge[entry.contentType] || typeBadge.text;
+
+  return (
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 group">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${badge.cls}`}>{badge.label}</span>
+          {sourceHost && (
+            <a
+              href={entry.sourceUrl!}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
+            >
+              {sourceHost}
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="ml-0.5">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+          )}
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            {new Date(entry.capturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md text-xs text-gray-600 dark:text-gray-400 transition-all flex-shrink-0"
+          title="Copy to clipboard"
+        >
+          {copied ? (
+            <>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Copied
+            </>
+          ) : (
+            <>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              Copy
+            </>
+          )}
+        </button>
+      </div>
+
+      {entry.summary && (
+        <p className="text-xs text-purple-600 dark:text-purple-400 mb-2 font-medium">{entry.summary}</p>
+      )}
+
+      <pre className={`text-sm font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words leading-relaxed ${entry.contentType === 'code' ? 'bg-gray-50 dark:bg-gray-800 rounded-lg p-2.5 text-xs' : ''}`}>
+        {displayContent}
+      </pre>
+
+      {isLong && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          {expanded ? 'Show less' : `Show all (${entry.content.length} chars)`}
+        </button>
       )}
     </div>
   );

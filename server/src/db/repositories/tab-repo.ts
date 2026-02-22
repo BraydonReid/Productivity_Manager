@@ -45,7 +45,7 @@ export function upsertTabs(
       fav_icon_url = COALESCE(excluded.fav_icon_url, tabs.fav_icon_url),
       closed_at = excluded.closed_at,
       last_active_at = excluded.last_active_at,
-      active_time = excluded.active_time,
+      active_time = MAX(excluded.active_time, tabs.active_time),
       scroll_x = excluded.scroll_x,
       scroll_y = excluded.scroll_y,
       scroll_percentage = excluded.scroll_percentage,
@@ -81,8 +81,31 @@ export function upsertTabs(
 
 export function getTabsBySession(sessionId: string): TabRow[] {
   const db = getDb();
-  return db.prepare('SELECT * FROM tabs WHERE session_id = ? ORDER BY visit_order DESC, last_active_at DESC')
+  const rows = db.prepare('SELECT * FROM tabs WHERE session_id = ? ORDER BY visit_order DESC, last_active_at DESC')
     .all(sessionId) as TabRow[];
+
+  // Deduplicate by URL: merge active times, keep most recent metadata
+  const byUrl = new Map<string, TabRow>();
+  for (const row of rows) {
+    const existing = byUrl.get(row.url);
+    if (existing) {
+      existing.active_time += row.active_time;
+      // Keep the version with the highest visit_order (most recently visited)
+      if (row.visit_order > existing.visit_order) {
+        existing.visit_order = row.visit_order;
+        existing.title = row.title;
+        existing.fav_icon_url = row.fav_icon_url || existing.fav_icon_url;
+        existing.last_active_at = row.last_active_at;
+        existing.scroll_percentage = Math.max(existing.scroll_percentage, row.scroll_percentage);
+      }
+    } else {
+      byUrl.set(row.url, { ...row });
+    }
+  }
+
+  return Array.from(byUrl.values()).sort(
+    (a, b) => b.visit_order - a.visit_order || (b.last_active_at || '').localeCompare(a.last_active_at || '')
+  );
 }
 
 export function updateTab(

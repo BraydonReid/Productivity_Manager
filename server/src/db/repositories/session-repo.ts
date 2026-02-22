@@ -36,7 +36,7 @@ export function upsertSession(session: {
       summary = COALESCE(excluded.summary, sessions.summary),
       tags = excluded.tags,
       is_active = excluded.is_active,
-      total_active_time = excluded.total_active_time
+      total_active_time = MAX(excluded.total_active_time, sessions.total_active_time)
   `).run(
     session.id,
     session.userId,

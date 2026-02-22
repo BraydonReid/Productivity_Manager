@@ -35,6 +35,7 @@ router.post('/summarize-session', async (req, res) => {
 
     const tabs = getTabsBySession(sessionId);
     const notes = getNotes({ sessionId });
+    const clipboard = getClipboardEntries({ sessionId });
 
     const summary = await summarizeSession({
       name: session.name,
@@ -42,8 +43,10 @@ router.post('/summarize-session', async (req, res) => {
         url: t.url,
         title: t.title,
         activeTime: t.active_time,
+        scrollPercentage: t.scroll_percentage,
       })),
       notes: notes.map((n) => ({ content: n.content })),
+      clipboardEntries: clipboard.map((c) => ({ content: c.content, contentType: c.content_type })),
       totalActiveTime: session.total_active_time,
     });
 
@@ -196,9 +199,18 @@ router.get('/next-steps/:sessionId', (req, res) => {
 // Toggle next step completion
 router.put('/next-steps/:id/toggle', (req, res) => {
   const db = getDb();
-  db.prepare('UPDATE next_steps SET is_completed = NOT is_completed WHERE id = ?')
-    .run(req.params.id);
-  res.json({ success: true });
+  db.prepare('UPDATE next_steps SET is_completed = NOT is_completed WHERE id = ?').run(req.params.id);
+  const step = db.prepare('SELECT * FROM next_steps WHERE id = ?').get(req.params.id) as any;
+  if (!step) { res.status(404).json({ error: 'Step not found' }); return; }
+  res.json({
+    id: step.id,
+    sessionId: step.session_id,
+    step: step.step,
+    reasoning: step.reasoning,
+    relatedTabIds: JSON.parse(step.related_tab_ids),
+    isCompleted: Boolean(step.is_completed),
+    generatedAt: step.generated_at,
+  });
 });
 
 // Analyze a webpage's content and return key notes

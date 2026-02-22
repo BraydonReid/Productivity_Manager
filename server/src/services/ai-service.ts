@@ -9,46 +9,59 @@ function getClient(): OpenAI {
 
 export async function summarizeSession(sessionData: {
   name: string;
-  tabs: { url: string; title: string; activeTime: number }[];
+  tabs: { url: string; title: string; activeTime: number; scrollPercentage?: number }[];
   notes: { content: string }[];
+  clipboardEntries?: { content: string; contentType: string }[];
   totalActiveTime: number;
 }): Promise<string> {
   const client = getClient();
 
+  const totalMinutes = Math.round(sessionData.totalActiveTime / 60000);
+
   const tabSummary = sessionData.tabs
     .sort((a, b) => b.activeTime - a.activeTime)
     .slice(0, 20)
-    .map((t) => `- ${t.title} (${t.url}) [${Math.round(t.activeTime / 60000)}min]`)
+    .map((t) => {
+      const mins = Math.round(t.activeTime / 60000);
+      const scroll = t.scrollPercentage != null ? ` ${Math.round(t.scrollPercentage)}% read` : '';
+      return `- ${t.title} [${mins}min${scroll}]`;
+    })
     .join('\n');
 
-  const notesSummary = sessionData.notes
-    .slice(0, 10)
-    .map((n) => `- ${n.content.substring(0, 200)}`)
-    .join('\n');
+  const notesSummary = sessionData.notes.length > 0
+    ? sessionData.notes.slice(0, 10).map((n) => `- ${n.content.substring(0, 300)}`).join('\n')
+    : '';
+
+  const clipboardSummary = sessionData.clipboardEntries && sessionData.clipboardEntries.length > 0
+    ? sessionData.clipboardEntries.slice(0, 5).map((c) => `- [${c.contentType}] ${c.content.substring(0, 150)}`).join('\n')
+    : '';
 
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
       {
         role: 'system',
-        content:
-          'You are a productivity assistant. Summarize the user\'s browsing session in 2-3 concise sentences. Focus on what they were working on, key topics, and progress made. Be specific and actionable.',
+        content: `You are an expert productivity coach summarizing a user's work session. Write a helpful 3-4 sentence summary that:
+1. States what they were primarily working on and their apparent goal
+2. Highlights key accomplishments or discoveries (be specific — mention actual topics, tools, or decisions from the tab titles/notes)
+3. Notes any unfinished work or potential follow-ups (e.g., tabs with low read % suggest unfinished reading)
+4. Ends with one concrete observation about their focus or work pattern
+
+Be direct, specific, and genuinely useful — not generic. Reference actual content from the session.`,
       },
       {
         role: 'user',
         content: `Session: "${sessionData.name}"
-Total active time: ${Math.round(sessionData.totalActiveTime / 60000)} minutes
+Active time: ${totalMinutes} minutes across ${sessionData.tabs.length} unique pages
 
-Tabs visited (sorted by time spent):
+Pages by time spent:
 ${tabSummary}
-
-${notesSummary ? `Notes taken:\n${notesSummary}` : 'No notes taken.'}
-
-Provide a brief summary of this work session.`,
+${notesSummary ? `\nNotes captured:\n${notesSummary}` : ''}
+${clipboardSummary ? `\nClipboard items:\n${clipboardSummary}` : ''}`,
       },
     ],
-    max_tokens: 200,
-    temperature: 0.3,
+    max_tokens: 300,
+    temperature: 0.4,
   });
 
   return response.choices[0]?.message?.content || 'Unable to generate summary.';
