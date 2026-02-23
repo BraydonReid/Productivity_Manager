@@ -6,6 +6,78 @@ interface ChatMessage {
   content: string;
 }
 
+interface ExportTable {
+  name: string;
+  headers: string[];
+  rows: string[][];
+}
+
+interface ExportTierList {
+  tiers: Record<string, string[]>;
+}
+
+interface ExportData {
+  title?: string;
+  tables?: ExportTable[];
+  tierLists?: ExportTierList[];
+  [key: string]: unknown;
+}
+
+function escapeCsv(val: string): string {
+  const str = String(val ?? '');
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function convertToCSV(data: ExportData): string {
+  const sections: string[] = [];
+
+  for (const table of data.tables ?? []) {
+    if (table.headers.length === 0 && table.rows.length === 0) continue;
+    sections.push(`# ${table.name}`);
+    if (table.headers.length > 0) {
+      sections.push(table.headers.map(escapeCsv).join(','));
+    }
+    for (const row of table.rows) {
+      sections.push(row.map(escapeCsv).join(','));
+    }
+    sections.push('');
+  }
+
+  for (const tierList of data.tierLists ?? []) {
+    const entries = Object.entries(tierList.tiers);
+    if (entries.length === 0) continue;
+    sections.push('# Tier List');
+    sections.push('Tier,Item');
+    for (const [tierName, items] of entries) {
+      for (const item of items) {
+        sections.push(`${escapeCsv(tierName)},${escapeCsv(item)}`);
+      }
+    }
+    sections.push('');
+  }
+
+  return sections.join('\n');
+}
+
+function triggerDownload(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function slugify(title: string, maxLen = 60): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, maxLen);
+}
+
 export default function PageChat() {
   const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -19,25 +91,25 @@ export default function PageChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  async function handleExport() {
+  async function handleExport(format: 'csv' | 'json') {
     setExporting(true);
     setExportStatus(null);
     try {
-      const result = await sendMessage<{ success?: boolean; data?: Record<string, unknown>; error?: string }>({
+      const result = await sendMessage<{ success?: boolean; data?: ExportData; error?: string }>({
         type: 'EXPORT_PAGE_DATA',
       });
 
       if (result?.success && result.data) {
-        const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const title = (result.data.title as string) || 'page-export';
-        a.href = url;
-        a.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const data = result.data;
+        const base = slugify(data.title || 'page-export');
+
+        if (format === 'csv') {
+          const csv = convertToCSV(data);
+          if (!csv.trim()) { setExportStatus('error'); return; }
+          triggerDownload(csv, `${base}.csv`, 'text/csv');
+        } else {
+          triggerDownload(JSON.stringify(data, null, 2), `${base}.json`, 'application/json');
+        }
         setExportStatus('success');
       } else {
         setExportStatus('error');
@@ -80,6 +152,14 @@ export default function PageChat() {
       setLoading(false);
     }
   }
+
+  const downloadIcon = (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  );
 
   return (
     <div className="bg-gray-800 rounded-lg overflow-hidden">
@@ -154,25 +234,30 @@ export default function PageChat() {
                 Clear chat
               </button>
             ) : <span />}
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-1.5">
               {exportStatus === 'success' && (
                 <span className="text-xs text-green-400">Downloaded!</span>
               )}
               {exportStatus === 'error' && (
                 <span className="text-xs text-red-400">Nothing to export</span>
               )}
+              <span className="text-xs text-gray-500">Export:</span>
               <button
-                onClick={handleExport}
+                onClick={() => handleExport('csv')}
                 disabled={exporting}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200 disabled:opacity-50 transition-colors"
-                title="Export page tables and structured data as JSON"
+                title="Export tables and tier lists as CSV (opens in Excel)"
+                className="flex items-center gap-1 text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-gray-300 hover:text-white transition-colors"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                {exporting ? 'Exporting…' : 'Export Data'}
+                {downloadIcon} CSV
+              </button>
+              <button
+                onClick={() => handleExport('json')}
+                disabled={exporting}
+                title="Export all structured data as JSON"
+                className="flex items-center gap-1 text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-gray-300 hover:text-white transition-colors"
+              >
+                {downloadIcon} JSON
               </button>
             </div>
           </div>
