@@ -21,7 +21,7 @@ import {
   restoreFocusState,
 } from './focus-mode';
 import { autoGroupByDomain, autoGroupByAI } from './auto-group';
-import { postToServer, serverRequest } from './server-bridge';
+import { postToServer } from './server-bridge';
 import {
   API_BASE,
   ALARM_NAMES,
@@ -78,7 +78,7 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // Collapse all tab groups except the one containing the active tab
-async function collapseInactiveGroups(activeTabId: number): Promise<void> {
+async function collapseInactiveGroups(): Promise<void> {
   try {
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!activeTab) return;
@@ -103,7 +103,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   onTabActivated(activeInfo);
   const stored = await chrome.storage.local.get(STORAGE_KEYS.AUTO_COLLAPSE_GROUPS);
   if (stored[STORAGE_KEYS.AUTO_COLLAPSE_GROUPS]) {
-    await collapseInactiveGroups(activeInfo.tabId);
+    await collapseInactiveGroups();
   }
 });
 chrome.windows.onFocusChanged.addListener(onWindowFocusChanged);
@@ -491,6 +491,9 @@ async function handleMessage(
           return handleMessage({ type: 'AUTO_GROUP_TABS', payload: { useAI: false } } as ExtensionMessage, sender);
         case 'auto-group-ai':
           return handleMessage({ type: 'AUTO_GROUP_TABS', payload: { useAI: true } } as ExtensionMessage, sender);
+        case 'collapse-groups':
+          await collapseInactiveGroups();
+          return { ok: true };
         case 'analyze-page':
           return handleMessage({ type: 'ANALYZE_PAGE' } as ExtensionMessage, sender);
         default:
