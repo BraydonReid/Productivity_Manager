@@ -219,7 +219,8 @@ export type ExtensionMessage =
   | { type: 'RESTORE_SCROLL'; payload: { x: number; y: number } }
   | { type: 'AUTO_GROUP_TABS'; payload?: { useAI?: boolean } }
   | { type: 'TOGGLE_COMMAND_MENU' }
-  | { type: 'COMMAND_EXECUTE'; payload: { command: string; args?: any } };
+  | { type: 'COMMAND_EXECUTE'; payload: { command: string; args?: any } }
+  | { type: 'EXPORT_PAGE_DATA' };
 
 // Cloud Sync
 export interface SyncStatus {

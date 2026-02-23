@@ -238,6 +238,7 @@ Guidelines:
 - Focus on actionable information, key data points, decisions, and important details
 - If it's a code page, note the key concepts or solutions shown
 - If it's documentation, note the essential API details or steps
+- If a "=== STRUCTURED DATA ===" section is present (tables, tier lists), summarize its key contents
 - Skip boilerplate, navigation text, and ads`,
       },
       {
@@ -276,11 +277,18 @@ export async function chatWithPage(page: {
       role: 'system',
       content: `You are a helpful assistant answering questions about a specific webpage. Use the page content provided to give accurate, concise answers. If the answer isn't in the page content, say so clearly.
 
+The content may include a "=== STRUCTURED DATA ===" section containing:
+- Tables formatted as pipe-delimited rows
+- Tier lists formatted as "TierName: item1, item2, ..."
+- Definition lists formatted as "key: value"
+
+When answering questions about tables or tier lists, use the structured data section precisely — it reflects the actual structure of the page even if the text content doesn't show it clearly.
+
 Page: "${page.title}"
 URL: ${page.url}
 
 Page Content:
-${page.content.substring(0, 5000)}`,
+${page.content.substring(0, 6000)}`,
     },
     // Include conversation history
     ...page.history.map((h) => ({

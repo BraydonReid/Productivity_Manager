@@ -44,6 +44,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ ok: true });
   } else if (message.type === 'GET_PAGE_CONTENT') {
     sendResponse(extractPageContent());
+  } else if (message.type === 'GET_EXPORT_DATA') {
+    sendResponse(extractExportData());
   } else if (message.type === 'TOGGLE_COMMAND_MENU') {
     toggleCommandMenu();
     sendResponse({ ok: true });
@@ -58,7 +60,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
-function extractPageContent(): { title: string; url: string; content: string } {
+function extractPageContent(): { title: string; url: string; content: string; structuredData: string } {
   const title = document.title || '';
   const url = window.location.href;
 
@@ -90,9 +92,170 @@ function extractPageContent(): { title: string; url: string; content: string } {
     if (text && text.length > 20) parts.push(text);
   });
 
-  // Join and truncate to ~6000 chars for the AI
   const content = parts.join('\n').substring(0, 6000);
-  return { title, url, content };
+  const structuredData = extractStructuredData();
+  return { title, url, content, structuredData };
+}
+
+/**
+ * Extract structured data from the page: HTML tables, tier lists, definition lists.
+ * Returns a plain-text representation the AI can reason about.
+ */
+function extractStructuredData(): string {
+  const sections: string[] = [];
+
+  // 1. Standard HTML <table> elements
+  document.querySelectorAll('table').forEach((table, i) => {
+    const caption = (table.querySelector('caption') as HTMLElement | null)?.innerText?.trim() || `Table ${i + 1}`;
+    const rows = Array.from(table.querySelectorAll('tr')).map((row) => {
+      const cells = Array.from(row.querySelectorAll('th, td'));
+      return cells.map((c) => (c as HTMLElement).innerText?.trim().replace(/\s+/g, ' ')).join(' | ');
+    }).filter((r) => r.trim());
+    if (rows.length > 1) sections.push(`[TABLE: ${caption}]\n${rows.join('\n')}`);
+  });
+
+  // 2. Tier lists — detect .label-holder/.tier pattern (e.g. tiermaker.com)
+  //    The pattern: <label-holder> sibling immediately before <div class="tier sort">
+  const tierData: string[] = [];
+  document.querySelectorAll('.label-holder, [class*="tier-label"], [class*="tier-header"]').forEach((labelEl) => {
+    const tierName = (labelEl.querySelector('.label, span') as HTMLElement | null)?.innerText?.trim()
+      || (labelEl as HTMLElement).innerText?.trim() || '';
+    if (!tierName) return;
+
+    // Find the adjacent tier content (next sibling or following sibling with .tier or .tier-row)
+    let sibling = labelEl.nextElementSibling;
+    while (sibling && !sibling.classList.contains('tier') && !sibling.className.includes('tier-row')) {
+      sibling = sibling.nextElementSibling;
+    }
+    if (!sibling) return;
+
+    const itemNames = extractItemNames(sibling);
+    if (itemNames.length > 0) {
+      tierData.push(`${tierName}: ${itemNames.join(', ')}`);
+    }
+  });
+
+  // Also try generic .tier.sort containers (if label-holder approach missed them)
+  if (tierData.length === 0) {
+    document.querySelectorAll('.tier.sort, [class*="tier-row"], [class*="tier-content"]').forEach((tierEl) => {
+      const prev = tierEl.previousElementSibling;
+      const labelEl = prev?.querySelector('.label, [class*="label"], span') || prev;
+      const tierName = labelEl ? (labelEl as HTMLElement).innerText?.trim() : '';
+      const itemNames = extractItemNames(tierEl);
+      if (itemNames.length > 0) {
+        tierData.push(`${tierName || 'Tier'}: ${itemNames.join(', ')}`);
+      }
+    });
+  }
+
+  if (tierData.length > 0) sections.push(`[TIER LIST]\n${tierData.join('\n')}`);
+
+  // 3. Definition lists <dl>
+  document.querySelectorAll('dl').forEach((dl, i) => {
+    const entries: string[] = [];
+    dl.querySelectorAll('dt').forEach((dt) => {
+      const dd = dt.nextElementSibling;
+      if (dd?.tagName === 'DD') {
+        const key = (dt as HTMLElement).innerText?.trim();
+        const val = (dd as HTMLElement).innerText?.trim();
+        if (key && val) entries.push(`${key}: ${val}`);
+      }
+    });
+    if (entries.length > 1) sections.push(`[DATA LIST ${i + 1}]\n${entries.join('\n')}`);
+  });
+
+  return sections.join('\n\n');
+}
+
+/** Extract item names from a tier/grid container using multiple strategies. */
+function extractItemNames(container: Element): string[] {
+  const names: string[] = [];
+  const items = container.querySelectorAll(
+    '.character, [class*="character"], [class*="item"], [class*="operator"], [class*="card"], [class*="hero"]'
+  );
+
+  items.forEach((item) => {
+    const img = item.querySelector('img') as HTMLImageElement | null;
+
+    // Strategy 1: img alt or title attribute
+    const altName = img?.alt?.trim() || img?.title?.trim() || '';
+    if (altName && altName.length > 1) { names.push(altName); return; }
+
+    // Strategy 2: filename from img src
+    const src = img?.src || '';
+    if (src) {
+      const m = src.match(/\/([^/?#]+?)\.(png|jpg|jpeg|gif|webp)/i);
+      if (m) { names.push(cleanFileName(m[1])); return; }
+    }
+
+    // Strategy 3: filename from background-image style
+    const bgImage = (item as HTMLElement).style?.backgroundImage || '';
+    if (bgImage) {
+      const m = bgImage.match(/\/([^/?#"']+?)\.(png|jpg|jpeg|gif|webp)/i);
+      if (m) { names.push(cleanFileName(m[1])); return; }
+    }
+
+    // Strategy 4: inner text
+    const text = (item as HTMLElement).innerText?.trim();
+    if (text && text.length > 0 && text.length < 50) names.push(text);
+  });
+
+  return names;
+}
+
+function cleanFileName(name: string): string {
+  return name
+    .replace(/[-_]/g, ' ')        // dashes/underscores → spaces
+    .replace(/icon$/i, '')         // strip trailing "icon"
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Full structured export: returns JSON-serialisable object with tables and tier lists.
+ * Used by the EXPORT_PAGE_DATA message.
+ */
+function extractExportData(): object {
+  const tables: object[] = [];
+  document.querySelectorAll('table').forEach((table, i) => {
+    const caption = (table.querySelector('caption') as HTMLElement | null)?.innerText?.trim() || `Table ${i + 1}`;
+    const headers = Array.from(table.querySelectorAll('thead th, thead td, tr:first-child th')).map(
+      (c) => (c as HTMLElement).innerText?.trim()
+    );
+    const rows = Array.from(table.querySelectorAll('tbody tr, tr')).map((row) =>
+      Array.from(row.querySelectorAll('td')).map((c) => (c as HTMLElement).innerText?.trim())
+    ).filter((r) => r.length > 0 && r.some(Boolean));
+    if (rows.length > 0) tables.push({ name: caption, headers, rows });
+  });
+
+  const tierLists: object[] = [];
+  const tierMap: Record<string, string[]> = {};
+
+  document.querySelectorAll('.label-holder, [class*="tier-label"], [class*="tier-header"]').forEach((labelEl) => {
+    const tierName = (labelEl.querySelector('.label, span') as HTMLElement | null)?.innerText?.trim()
+      || (labelEl as HTMLElement).innerText?.trim() || '';
+    if (!tierName) return;
+    let sibling = labelEl.nextElementSibling;
+    while (sibling && !sibling.classList.contains('tier') && !sibling.className.includes('tier-row')) {
+      sibling = sibling.nextElementSibling;
+    }
+    if (!sibling) return;
+    const items = extractItemNames(sibling);
+    if (items.length > 0) tierMap[tierName] = items;
+  });
+
+  if (Object.keys(tierMap).length > 0) {
+    tierLists.push({ tiers: tierMap });
+  }
+
+  return {
+    title: document.title,
+    url: window.location.href,
+    exportedAt: new Date().toISOString(),
+    tables,
+    tierLists,
+    structuredText: extractStructuredData(),
+  };
 }
 
 function toggleSidebar(): void {

@@ -291,10 +291,15 @@ async function handleMessage(
           return { error: 'Could not extract page content' };
         }
 
+        // Merge structured data into content for AI
+        const fullContent = pageContent.structuredData
+          ? `${pageContent.content}\n\n=== STRUCTURED DATA ===\n${pageContent.structuredData}`
+          : pageContent.content;
+
         // Send to server for AI analysis
         const res = await authedFetch(`${API_BASE}/ai/analyze-page`, {
           method: 'POST',
-          body: JSON.stringify(pageContent),
+          body: JSON.stringify({ title: pageContent.title, url: pageContent.url, content: fullContent }),
         });
         if (!res.ok) return { error: 'AI analysis failed' };
         const { notes } = await res.json();
@@ -343,9 +348,13 @@ async function handleMessage(
               continue;
             }
 
+            const fullContent = pageContent.structuredData
+              ? `${pageContent.content}\n\n=== STRUCTURED DATA ===\n${pageContent.structuredData}`
+              : pageContent.content;
+
             const res = await authedFetch(`${API_BASE}/ai/analyze-page`, {
               method: 'POST',
-              body: JSON.stringify(pageContent),
+              body: JSON.stringify({ title: pageContent.title, url: pageContent.url, content: fullContent }),
             });
 
             if (!res.ok) {
@@ -390,12 +399,17 @@ async function handleMessage(
           return { error: 'Could not extract page content' };
         }
 
+        // Append structured data (tables, tier lists, etc.) so AI can answer questions about them
+        const fullContent = pageContent.structuredData
+          ? `${pageContent.content}\n\n=== STRUCTURED DATA (tables, tier lists, etc.) ===\n${pageContent.structuredData}`
+          : pageContent.content;
+
         const res = await authedFetch(`${API_BASE}/ai/chat-page`, {
           method: 'POST',
           body: JSON.stringify({
             title: pageContent.title,
             url: pageContent.url,
-            content: pageContent.content,
+            content: fullContent,
             question: message.payload.question,
             history: message.payload.history || [],
           }),
@@ -404,6 +418,19 @@ async function handleMessage(
         if (!res.ok) return { error: 'Chat request failed' };
         const { answer } = await res.json();
         return { success: true, answer };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    }
+
+    case 'EXPORT_PAGE_DATA': {
+      try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!activeTab?.id || !activeTab.url || activeTab.url.startsWith('chrome://')) {
+          return { error: 'No exportable tab active' };
+        }
+        const data = await sendToContentScript(activeTab.id, { type: 'GET_EXPORT_DATA' });
+        return { success: true, data };
       } catch (err) {
         return { error: (err as Error).message };
       }
