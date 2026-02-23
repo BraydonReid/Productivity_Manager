@@ -4,7 +4,7 @@ import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { aiRateLimiter } from './middleware/rate-limiter.js';
-import { getDb, closeDb } from './db/connection.js';
+import { initDb, closeDb } from './db/connection.js';
 
 import authRouter from './routes/auth.js';
 import sessionsRouter from './routes/sessions.js';
@@ -46,24 +46,21 @@ app.use('/api/focus', focusRouter);
 // Error handler
 app.use(errorHandler);
 
-// Initialize database
-getDb();
+// Initialize database and start server
+(async () => {
+  await initDb();
 
-// Start server
-const server = app.listen(config.port, () => {
-  console.log(`Session Memory server running on http://localhost:${config.port}`);
-});
+  const server = app.listen(config.port, () => {
+    console.log(`Session Memory server running on http://localhost:${config.port}`);
+  });
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
-  server.close();
-  closeDb();
-  process.exit(0);
-});
+  const shutdown = async () => {
+    console.log('\nShutting down...');
+    server.close();
+    await closeDb();
+    process.exit(0);
+  };
 
-process.on('SIGTERM', () => {
-  server.close();
-  closeDb();
-  process.exit(0);
-});
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+})();

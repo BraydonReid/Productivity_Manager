@@ -15,7 +15,7 @@ import {
   chatWithPage,
   clusterTabs,
 } from '../services/ai-service.js';
-import { getDb } from '../db/connection.js';
+import { getPool } from '../db/connection.js';
 import { serializeVector } from '../services/search-service.js';
 import { v4 as uuid } from 'uuid';
 import { createHash } from 'crypto';
@@ -27,15 +27,17 @@ router.post('/summarize-session', async (req, res) => {
   try {
     const userId = req.user!.userId;
     const { sessionId } = req.body;
-    const session = getSession(sessionId, userId);
+    const session = await getSession(sessionId, userId);
     if (!session) {
       res.status(404).json({ error: 'Session not found' });
       return;
     }
 
-    const tabs = getTabsBySession(sessionId);
-    const notes = getNotes({ sessionId });
-    const clipboard = getClipboardEntries({ sessionId });
+    const [tabs, notes, clipboard] = await Promise.all([
+      getTabsBySession(sessionId),
+      getNotes({ sessionId }),
+      getClipboardEntries({ sessionId }),
+    ]);
 
     const summary = await summarizeSession({
       name: session.name,
@@ -50,19 +52,19 @@ router.post('/summarize-session', async (req, res) => {
       totalActiveTime: session.total_active_time,
     });
 
-    updateSessionSummary(sessionId, summary, userId);
+    await updateSessionSummary(sessionId, summary, userId);
 
-    // Generate embedding for the session
+    // Generate embedding for the session (optional)
     const textForEmbedding = `${session.name} ${summary} ${tabs.map((t) => t.title).join(' ')}`;
     try {
       const embedding = await generateEmbedding(textForEmbedding);
-      const db = getDb();
+      const pool = getPool();
       const textHash = createHash('md5').update(textForEmbedding).digest('hex');
-      db.prepare(`
+      await pool.query(`
         INSERT INTO embeddings (id, entity_type, entity_id, vector, text_hash, created_at)
-        VALUES (?, 'session', ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET vector = excluded.vector, text_hash = excluded.text_hash
-      `).run(uuid(), sessionId, serializeVector(embedding), textHash, new Date().toISOString());
+        VALUES ($1, 'session', $2, $3, $4, $5)
+        ON CONFLICT (id) DO UPDATE SET vector = EXCLUDED.vector, text_hash = EXCLUDED.text_hash
+      `, [uuid(), sessionId, serializeVector(embedding), textHash, new Date().toISOString()]);
     } catch {
       // Embedding generation is optional
     }
@@ -78,11 +80,11 @@ router.post('/name-session', async (req, res) => {
   try {
     const userId = req.user!.userId;
     const { sessionId } = req.body;
-    const tabs = getTabsBySession(sessionId);
+    const tabs = await getTabsBySession(sessionId);
     const name = await generateSessionName(
       tabs.map((t) => ({ url: t.url, title: t.title }))
     );
-    updateSessionName(sessionId, name, userId);
+    await updateSessionName(sessionId, name, userId);
     res.json({ name });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -94,7 +96,7 @@ router.post('/detect-tasks', async (req, res) => {
   try {
     const userId = req.user!.userId;
     const { sessionId } = req.body;
-    const tabs = getTabsBySession(sessionId);
+    const tabs = await getTabsBySession(sessionId);
     const tasks = await detectTasks(
       tabs.map((t) => ({
         id: t.id,
@@ -105,20 +107,18 @@ router.post('/detect-tasks', async (req, res) => {
     );
 
     // Save task labels
-    const db = getDb();
-    const stmt = db.prepare(`
-      INSERT INTO task_labels (id, session_id, label, confidence, associated_tab_ids, detected_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
+    const pool = getPool();
     const now = new Date().toISOString();
     for (const task of tasks) {
-      stmt.run(uuid(), sessionId, task.label, task.confidence, JSON.stringify(task.tabIds), now);
+      await pool.query(`
+        INSERT INTO task_labels (id, session_id, label, confidence, associated_tab_ids, detected_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [uuid(), sessionId, task.label, task.confidence, JSON.stringify(task.tabIds), now]);
     }
 
     // Update session tags
     const tags = tasks.map((t) => t.label);
-    updateSessionTags(sessionId, tags, userId);
+    await updateSessionTags(sessionId, tags, userId);
 
     res.json({ tasks });
   } catch (err) {
@@ -131,15 +131,17 @@ router.post('/next-steps', async (req, res) => {
   try {
     const userId = req.user!.userId;
     const { sessionId } = req.body;
-    const session = getSession(sessionId, userId);
+    const session = await getSession(sessionId, userId);
     if (!session) {
       res.status(404).json({ error: 'Session not found' });
       return;
     }
 
-    const tabs = getTabsBySession(sessionId);
-    const notes = getNotes({ sessionId });
-    const clipboard = getClipboardEntries({ sessionId });
+    const [tabs, notes, clipboard] = await Promise.all([
+      getTabsBySession(sessionId),
+      getNotes({ sessionId }),
+      getClipboardEntries({ sessionId }),
+    ]);
 
     const steps = await generateNextSteps({
       name: session.name,
@@ -158,18 +160,16 @@ router.post('/next-steps', async (req, res) => {
       summary: session.summary,
     });
 
-    // Save next steps
-    const db = getDb();
+    // Save next steps — clear old ones first
+    const pool = getPool();
     const now = new Date().toISOString();
-    // Clear old steps for this session
-    db.prepare('DELETE FROM next_steps WHERE session_id = ?').run(sessionId);
+    await pool.query('DELETE FROM next_steps WHERE session_id = $1', [sessionId]);
 
-    const stmt = db.prepare(`
-      INSERT INTO next_steps (id, session_id, step, reasoning, related_tab_ids, generated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
     for (const step of steps) {
-      stmt.run(uuid(), sessionId, step.step, step.reasoning, JSON.stringify(step.relatedTabIds || []), now);
+      await pool.query(`
+        INSERT INTO next_steps (id, session_id, step, reasoning, related_tab_ids, generated_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [uuid(), sessionId, step.step, step.reasoning, JSON.stringify(step.relatedTabIds || []), now]);
     }
 
     res.json({ steps });
@@ -179,38 +179,47 @@ router.post('/next-steps', async (req, res) => {
 });
 
 // Get saved next steps for a session
-router.get('/next-steps/:sessionId', (req, res) => {
-  const db = getDb();
-  const steps = db.prepare(
-    'SELECT * FROM next_steps WHERE session_id = ? ORDER BY generated_at DESC'
-  ).all(req.params.sessionId) as any[];
-
-  res.json(steps.map((s: any) => ({
-    id: s.id,
-    sessionId: s.session_id,
-    step: s.step,
-    reasoning: s.reasoning,
-    relatedTabIds: JSON.parse(s.related_tab_ids),
-    isCompleted: Boolean(s.is_completed),
-    generatedAt: s.generated_at,
-  })));
+router.get('/next-steps/:sessionId', async (req, res) => {
+  try {
+    const pool = getPool();
+    const { rows } = await pool.query(
+      'SELECT * FROM next_steps WHERE session_id = $1 ORDER BY generated_at DESC',
+      [req.params.sessionId]
+    );
+    res.json(rows.map((s: any) => ({
+      id: s.id,
+      sessionId: s.session_id,
+      step: s.step,
+      reasoning: s.reasoning,
+      relatedTabIds: JSON.parse(s.related_tab_ids),
+      isCompleted: Boolean(s.is_completed),
+      generatedAt: s.generated_at,
+    })));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
 // Toggle next step completion
-router.put('/next-steps/:id/toggle', (req, res) => {
-  const db = getDb();
-  db.prepare('UPDATE next_steps SET is_completed = NOT is_completed WHERE id = ?').run(req.params.id);
-  const step = db.prepare('SELECT * FROM next_steps WHERE id = ?').get(req.params.id) as any;
-  if (!step) { res.status(404).json({ error: 'Step not found' }); return; }
-  res.json({
-    id: step.id,
-    sessionId: step.session_id,
-    step: step.step,
-    reasoning: step.reasoning,
-    relatedTabIds: JSON.parse(step.related_tab_ids),
-    isCompleted: Boolean(step.is_completed),
-    generatedAt: step.generated_at,
-  });
+router.put('/next-steps/:id/toggle', async (req, res) => {
+  try {
+    const pool = getPool();
+    await pool.query('UPDATE next_steps SET is_completed = NOT is_completed WHERE id = $1', [req.params.id]);
+    const { rows } = await pool.query('SELECT * FROM next_steps WHERE id = $1', [req.params.id]);
+    const step = rows[0];
+    if (!step) { res.status(404).json({ error: 'Step not found' }); return; }
+    res.json({
+      id: step.id,
+      sessionId: step.session_id,
+      step: step.step,
+      reasoning: step.reasoning,
+      relatedTabIds: JSON.parse(step.related_tab_ids),
+      isCompleted: Boolean(step.is_completed),
+      generatedAt: step.generated_at,
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
 // Analyze a webpage's content and return key notes
@@ -270,7 +279,7 @@ router.post('/cluster-tabs', async (req, res) => {
 router.post('/summarize-clipboard', async (req, res) => {
   try {
     const { clipboardEntryId } = req.body;
-    const entries = getClipboardEntries({});
+    const entries = await getClipboardEntries({});
     const entry = entries.find((e) => e.id === clipboardEntryId);
     if (!entry) {
       res.status(404).json({ error: 'Clipboard entry not found' });
@@ -278,7 +287,7 @@ router.post('/summarize-clipboard', async (req, res) => {
     }
 
     const summary = await summarizeClipboard(entry.content);
-    updateClipboardSummary(clipboardEntryId, summary);
+    await updateClipboardSummary(clipboardEntryId, summary);
     res.json({ summary });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });

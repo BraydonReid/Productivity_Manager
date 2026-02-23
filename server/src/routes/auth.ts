@@ -21,14 +21,14 @@ router.post('/register', async (req, res) => {
     return;
   }
   try {
-    const existing = getUserByEmail(email.toLowerCase());
+    const existing = await getUserByEmail(email.toLowerCase());
     if (existing) {
       res.status(409).json({ error: 'Email already registered' });
       return;
     }
     const passwordHash = await bcrypt.hash(password, 12);
     const userId = uuidv4();
-    createUser({ id: userId, email: email.toLowerCase(), passwordHash, createdAt: new Date().toISOString() });
+    await createUser({ id: userId, email: email.toLowerCase(), passwordHash, createdAt: new Date().toISOString() });
     const token = jwt.sign({ userId, email: email.toLowerCase() }, config.jwtSecret, { expiresIn: TOKEN_EXPIRY });
     res.json({ token, email: email.toLowerCase() });
   } catch (err) {
@@ -43,7 +43,7 @@ router.post('/login', async (req, res) => {
     return;
   }
   try {
-    const user = getUserByEmail(email.toLowerCase());
+    const user = await getUserByEmail(email.toLowerCase());
     if (!user) {
       res.status(401).json({ error: 'Invalid email or password' });
       return;

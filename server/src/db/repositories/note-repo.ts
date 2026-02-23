@@ -1,4 +1,4 @@
-import { getDb } from '../connection.js';
+import { getPool } from '../connection.js';
 
 export interface NoteRow {
   id: string;
@@ -10,7 +10,7 @@ export interface NoteRow {
   updated_at: string;
 }
 
-export function createNote(note: {
+export async function createNote(note: {
   id: string;
   sessionId: string | null;
   tabId?: string | null;
@@ -18,55 +18,36 @@ export function createNote(note: {
   content: string;
   createdAt: string;
   updatedAt: string;
-}): void {
-  const db = getDb();
-  db.prepare(`
-    INSERT INTO notes (id, session_id, tab_id, url, content, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    note.id,
-    note.sessionId,
-    note.tabId || null,
-    note.url || null,
-    note.content,
-    note.createdAt,
-    note.updatedAt
+}): Promise<void> {
+  await getPool().query(
+    'INSERT INTO notes (id, session_id, tab_id, url, content, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+    [note.id, note.sessionId, note.tabId || null, note.url || null, note.content, note.createdAt, note.updatedAt]
   );
 }
 
-export function getNotes(filters: {
-  sessionId?: string;
-  url?: string;
-}): NoteRow[] {
-  const db = getDb();
+export async function getNotes(filters: { sessionId?: string; url?: string }): Promise<NoteRow[]> {
   const conditions: string[] = [];
   const params: unknown[] = [];
+  let idx = 1;
 
-  if (filters.sessionId) {
-    conditions.push('session_id = ?');
-    params.push(filters.sessionId);
-  }
-  if (filters.url) {
-    conditions.push('url = ?');
-    params.push(filters.url);
-  }
+  if (filters.sessionId) { conditions.push(`session_id = $${idx++}`); params.push(filters.sessionId); }
+  if (filters.url) { conditions.push(`url = $${idx++}`); params.push(filters.url); }
 
   let sql = 'SELECT * FROM notes';
-  if (conditions.length > 0) {
-    sql += ' WHERE ' + conditions.join(' AND ');
-  }
+  if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
   sql += ' ORDER BY created_at DESC';
 
-  return db.prepare(sql).all(...params) as NoteRow[];
+  const { rows } = await getPool().query<NoteRow>(sql, params);
+  return rows;
 }
 
-export function updateNote(id: string, content: string): void {
-  const db = getDb();
-  db.prepare('UPDATE notes SET content = ?, updated_at = ? WHERE id = ?')
-    .run(content, new Date().toISOString(), id);
+export async function updateNote(id: string, content: string): Promise<void> {
+  await getPool().query(
+    'UPDATE notes SET content = $1, updated_at = $2 WHERE id = $3',
+    [content, new Date().toISOString(), id]
+  );
 }
 
-export function deleteNote(id: string): void {
-  const db = getDb();
-  db.prepare('DELETE FROM notes WHERE id = ?').run(id);
+export async function deleteNote(id: string): Promise<void> {
+  await getPool().query('DELETE FROM notes WHERE id = $1', [id]);
 }

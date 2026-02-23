@@ -1,4 +1,4 @@
-import { getDb } from '../db/connection.js';
+import { getPool } from '../db/connection.js';
 import { generateEmbedding } from './ai-service.js';
 
 interface SearchResult {
@@ -19,7 +19,7 @@ export async function searchSessions(
   const results: Map<string, SearchResult> = new Map();
 
   if (mode === 'fulltext' || mode === 'hybrid') {
-    const ftsResults = fulltextSearch(query, userId);
+    const ftsResults = await fulltextSearch(query, userId);
     for (const r of ftsResults) {
       results.set(r.id, { ...r, matchType: 'fulltext' });
     }
@@ -31,7 +31,6 @@ export async function searchSessions(
       for (const r of semanticResults) {
         const existing = results.get(r.id);
         if (existing) {
-          // Combine scores for hybrid
           existing.score = existing.score * 0.4 + r.score * 0.6;
           existing.matchType = 'hybrid';
         } else {
@@ -46,63 +45,69 @@ export async function searchSessions(
   return Array.from(results.values()).sort((a, b) => b.score - a.score);
 }
 
-function fulltextSearch(query: string, userId?: string): SearchResult[] {
-  const db = getDb();
+async function fulltextSearch(query: string, userId?: string): Promise<SearchResult[]> {
+  const pool = getPool();
 
   try {
-    const userFilter = userId ? 'AND s.user_id = ?' : '';
-    const userParam = userId ? [userId] : [];
+    const userFilter = userId ? 'AND s.user_id = $2' : '';
+    const sessionParams: unknown[] = [query];
+    if (userId) sessionParams.push(userId);
 
-    // Search sessions FTS
-    const sessionResults = db.prepare(`
+    const tsvecExpr = `to_tsvector('english', coalesce(s.name,'') || ' ' || coalesce(s.tags,'') || ' ' || coalesce(s.summary,''))`;
+    const tsquery = `plainto_tsquery('english', $1)`;
+
+    const sessionResults = await pool.query<any>(`
       SELECT s.id, s.name, s.summary, s.created_at,
-             rank as score
-      FROM sessions_fts fts
-      JOIN sessions s ON s.rowid = fts.rowid
-      WHERE sessions_fts MATCH ? ${userFilter}
-      ORDER BY rank
+             ts_rank(${tsvecExpr}, ${tsquery}) AS score
+      FROM sessions s
+      WHERE ${tsvecExpr} @@ ${tsquery} ${userFilter}
+      ORDER BY score DESC
       LIMIT 20
-    `).all(query, ...userParam) as any[];
+    `, sessionParams);
 
-    // Search notes FTS and join to sessions
-    const noteResults = db.prepare(`
+    const noteFilter = userId ? 'AND s.user_id = $2' : '';
+    const noteParams: unknown[] = [query];
+    if (userId) noteParams.push(userId);
+
+    const noteResults = await pool.query<any>(`
       SELECT n.session_id as id, s.name, s.summary, s.created_at,
-             rank as score, n.content as highlight
-      FROM notes_fts fts
-      JOIN notes n ON n.rowid = fts.rowid
+             ts_rank(to_tsvector('english', coalesce(n.content,'')), plainto_tsquery('english', $1)) AS score,
+             n.content as highlight
+      FROM notes n
       JOIN sessions s ON s.id = n.session_id
-      WHERE notes_fts MATCH ? ${userFilter}
-      ORDER BY rank
+      WHERE to_tsvector('english', coalesce(n.content,'')) @@ plainto_tsquery('english', $1)
+        ${noteFilter}
+      ORDER BY score DESC
       LIMIT 20
-    `).all(query, ...userParam) as any[];
+    `, noteParams);
 
     const merged: Map<string, SearchResult> = new Map();
 
-    for (const r of sessionResults) {
+    for (const r of sessionResults.rows) {
       merged.set(r.id, {
         id: r.id,
         name: r.name,
         summary: r.summary,
         createdAt: r.created_at,
-        score: Math.abs(r.score),
+        score: parseFloat(r.score),
         matchType: 'fulltext',
         highlights: [],
       });
     }
 
-    for (const r of noteResults) {
+    for (const r of noteResults.rows) {
       if (!r.id) continue;
       const existing = merged.get(r.id);
       if (existing) {
         existing.highlights.push(r.highlight?.substring(0, 200) || '');
-        existing.score += Math.abs(r.score);
+        existing.score += parseFloat(r.score);
       } else {
         merged.set(r.id, {
           id: r.id,
           name: r.name,
           summary: r.summary,
           createdAt: r.created_at,
-          score: Math.abs(r.score),
+          score: parseFloat(r.score),
           matchType: 'fulltext',
           highlights: [r.highlight?.substring(0, 200) || ''],
         });
@@ -116,18 +121,18 @@ function fulltextSearch(query: string, userId?: string): SearchResult[] {
 }
 
 async function semanticSearch(query: string, userId?: string): Promise<SearchResult[]> {
-  const db = getDb();
+  const pool = getPool();
   const queryEmbedding = await generateEmbedding(query);
 
-  const userFilter = userId ? 'AND s.user_id = ?' : '';
-  const userParam = userId ? [userId] : [];
+  const userFilter = userId ? 'AND s.user_id = $1' : '';
+  const params: unknown[] = userId ? [userId] : [];
 
-  const rows = db.prepare(`
+  const { rows } = await pool.query<any>(`
     SELECT e.entity_id, e.vector, s.name, s.summary, s.created_at
     FROM embeddings e
     JOIN sessions s ON s.id = e.entity_id
     WHERE e.entity_type = 'session' ${userFilter}
-  `).all(...userParam) as any[];
+  `, params);
 
   const results: SearchResult[] = [];
 
@@ -165,15 +170,14 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return denom === 0 ? 0 : dotProduct / denom;
 }
 
-function deserializeVector(buffer: Buffer): number[] {
-  const float32 = new Float32Array(
-    buffer.buffer,
-    buffer.byteOffset,
-    buffer.byteLength / 4
-  );
-  return Array.from(float32);
+function deserializeVector(text: string): number[] {
+  try {
+    return JSON.parse(text) as number[];
+  } catch {
+    return [];
+  }
 }
 
-export function serializeVector(vector: number[]): Buffer {
-  return Buffer.from(new Float32Array(vector).buffer);
+export function serializeVector(vector: number[]): string {
+  return JSON.stringify(Array.from(vector));
 }

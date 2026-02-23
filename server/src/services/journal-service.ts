@@ -8,7 +8,7 @@ export async function generateDailyJournal(date: string, userId: string): Promis
   timeBreakdown: Record<string, number>;
   keyDecisions: string[];
 }> {
-  const dayData = getDaySessionData(date, userId);
+  const dayData = await getDaySessionData(date, userId);
 
   if (dayData.sessions.length === 0) {
     return {
@@ -45,7 +45,7 @@ export async function generateDailyJournal(date: string, userId: string): Promis
       keyDecisions: [],
     };
 
-    upsertJournal({
+    await upsertJournal({
       userId,
       date,
       summary: result.summary,
@@ -125,7 +125,7 @@ ${dayData.clipboardEntries.length > 0 ? `Clipboard entries: ${dayData.clipboardE
     keyDecisions: (parsed.keyDecisions as string[]) || [],
   };
 
-  upsertJournal({
+  await upsertJournal({
     userId,
     date,
     summary: result.summary,

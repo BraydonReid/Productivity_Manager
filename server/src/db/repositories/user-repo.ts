@@ -1,4 +1,4 @@
-import { getDb } from '../connection.js';
+import { getPool } from '../connection.js';
 
 export interface UserRow {
   id: string;
@@ -7,19 +7,19 @@ export interface UserRow {
   created_at: string;
 }
 
-export function createUser(user: { id: string; email: string; passwordHash: string; createdAt: string }): void {
-  const db = getDb();
-  db.prepare(
-    'INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)'
-  ).run(user.id, user.email, user.passwordHash, user.createdAt);
+export async function createUser(user: { id: string; email: string; passwordHash: string; createdAt: string }): Promise<void> {
+  await getPool().query(
+    'INSERT INTO users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4)',
+    [user.id, user.email, user.passwordHash, user.createdAt]
+  );
 }
 
-export function getUserByEmail(email: string): UserRow | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined;
+export async function getUserByEmail(email: string): Promise<UserRow | undefined> {
+  const { rows } = await getPool().query<UserRow>('SELECT * FROM users WHERE email = $1', [email]);
+  return rows[0];
 }
 
-export function getUserById(id: string): UserRow | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined;
+export async function getUserById(id: string): Promise<UserRow | undefined> {
+  const { rows } = await getPool().query<UserRow>('SELECT * FROM users WHERE id = $1', [id]);
+  return rows[0];
 }
