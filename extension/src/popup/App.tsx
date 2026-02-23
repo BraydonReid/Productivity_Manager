@@ -8,6 +8,7 @@ import FocusMode from './components/FocusMode';
 import PageChat from './components/PageChat';
 import RecentSessions from './components/RecentSessions';
 import AutoGroup from './components/AutoGroup';
+import ClipboardHistory from './components/ClipboardHistory';
 import AuthGate from './components/AuthGate';
 
 function AppContent() {
@@ -114,6 +115,9 @@ function AppContent() {
 
         {/* Recent Sessions */}
         <RecentSessions currentSessionId={currentSession?.id} />
+
+        {/* Clipboard History */}
+        <ClipboardHistory sessionId={currentSession?.id ?? null} />
 
         {/* Tab Grouping */}
         <AutoGroup />
