@@ -10,9 +10,13 @@ let pool: Pool;
 
 export function getPool(): Pool {
   if (!pool) {
+    if (!config.databaseUrl) {
+      throw new Error('DATABASE_URL environment variable is not set. Set it in Railway → your service → Variables.');
+    }
+    const isLocal = config.databaseUrl.includes('localhost') || config.databaseUrl.includes('127.0.0.1');
     pool = new Pool({
       connectionString: config.databaseUrl,
-      ssl: config.databaseUrl.includes('localhost') ? false : { rejectUnauthorized: false },
+      ssl: isLocal ? false : { rejectUnauthorized: false },
     });
   }
   return pool;
