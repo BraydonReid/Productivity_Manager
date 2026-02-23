@@ -167,9 +167,9 @@ router.post('/next-steps', async (req, res) => {
 
     for (const step of steps) {
       await pool.query(`
-        INSERT INTO next_steps (id, session_id, step, reasoning, related_tab_ids, generated_at)
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `, [uuid(), sessionId, step.step, step.reasoning, JSON.stringify(step.relatedTabIds || []), now]);
+        INSERT INTO next_steps (id, session_id, step, reasoning, related_tab_ids, suggested_urls, generated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [uuid(), sessionId, step.step, step.reasoning, JSON.stringify(step.relatedTabIds || []), JSON.stringify(step.suggestedUrls || []), now]);
     }
 
     res.json({ steps });
@@ -191,7 +191,8 @@ router.get('/next-steps/:sessionId', async (req, res) => {
       sessionId: s.session_id,
       step: s.step,
       reasoning: s.reasoning,
-      relatedTabIds: JSON.parse(s.related_tab_ids),
+      relatedTabIds: JSON.parse(s.related_tab_ids || '[]'),
+      suggestedUrls: JSON.parse(s.suggested_urls || '[]'),
       isCompleted: Boolean(s.is_completed),
       generatedAt: s.generated_at,
     })));
@@ -213,7 +214,8 @@ router.put('/next-steps/:id/toggle', async (req, res) => {
       sessionId: step.session_id,
       step: step.step,
       reasoning: step.reasoning,
-      relatedTabIds: JSON.parse(step.related_tab_ids),
+      relatedTabIds: JSON.parse(step.related_tab_ids || '[]'),
+      suggestedUrls: JSON.parse(step.suggested_urls || '[]'),
       isCompleted: Boolean(step.is_completed),
       generatedAt: step.generated_at,
     });

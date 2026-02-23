@@ -260,6 +260,26 @@ export default function SessionDetail() {
                   {step.reasoning && (
                     <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 leading-relaxed">{step.reasoning}</p>
                   )}
+                  {step.suggestedUrls?.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {step.suggestedUrls.map((url) => {
+                        let label = url;
+                        try { label = new URL(url).hostname.replace('www.', ''); } catch {}
+                        return (
+                          <a
+                            key={url}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded text-xs hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            {label}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

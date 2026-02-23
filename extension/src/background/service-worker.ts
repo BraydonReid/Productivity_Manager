@@ -11,7 +11,7 @@ import {
   getSessionNamingInfo,
   applyAIName,
 } from './session-tracker';
-import { checkClipboard } from './clipboard-monitor';
+import { checkClipboard, saveClipboardEntry } from './clipboard-monitor';
 import {
   startFocusMode,
   endFocusMode,
@@ -77,10 +77,35 @@ chrome.runtime.onStartup.addListener(() => {
   initSession();
 });
 
+// Collapse all tab groups except the one containing the active tab
+async function collapseInactiveGroups(activeTabId: number): Promise<void> {
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!activeTab) return;
+    const activeGroupId: number = (activeTab as any).groupId ?? -1;
+    const allGroups = await chrome.tabGroups.query({ windowId: activeTab.windowId });
+    for (const group of allGroups) {
+      if (group.id !== activeGroupId && !group.collapsed) {
+        await chrome.tabGroups.update(group.id, { collapsed: true });
+      } else if (group.id === activeGroupId && group.collapsed) {
+        await chrome.tabGroups.update(group.id, { collapsed: false });
+      }
+    }
+  } catch {
+    // tabGroups API may not be available in all contexts
+  }
+}
+
 // Tab event listeners (must be at top level for MV3)
 chrome.tabs.onUpdated.addListener(onTabUpdated);
 chrome.tabs.onRemoved.addListener(onTabRemoved);
-chrome.tabs.onActivated.addListener(onTabActivated);
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  onTabActivated(activeInfo);
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.AUTO_COLLAPSE_GROUPS);
+  if (stored[STORAGE_KEYS.AUTO_COLLAPSE_GROUPS]) {
+    await collapseInactiveGroups(activeInfo.tabId);
+  }
+});
 chrome.windows.onFocusChanged.addListener(onWindowFocusChanged);
 
 // Track new tab creation for focus mode
@@ -470,6 +495,19 @@ async function handleMessage(
           return handleMessage({ type: 'ANALYZE_PAGE' } as ExtensionMessage, sender);
         default:
           return null;
+      }
+    }
+
+    case 'CLIPBOARD_CAPTURED': {
+      try {
+        const stored = await chrome.storage.local.get(STORAGE_KEYS.CURRENT_SESSION_ID);
+        const sessionId = stored[STORAGE_KEYS.CURRENT_SESSION_ID];
+        if (sessionId) {
+          await saveClipboardEntry(message.payload.content, message.payload.sourceUrl, sessionId);
+        }
+        return { ok: true };
+      } catch {
+        return { ok: false };
       }
     }
 

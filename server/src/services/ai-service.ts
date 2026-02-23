@@ -163,14 +163,18 @@ export async function generateNextSteps(sessionData: {
   notes: { content: string }[];
   clipboardEntries: { content: string; contentType: string }[];
   summary: string | null;
-}): Promise<{ step: string; reasoning: string; relatedTabIds: string[] }[]> {
+}): Promise<{ step: string; reasoning: string; relatedTabIds: string[]; suggestedUrls: string[] }[]> {
   const client = getClient();
 
-  const tabInfo = sessionData.tabs
-    .sort((a, b) => b.activeTime - a.activeTime)
-    .slice(0, 20)
+  const sortedTabs = sessionData.tabs.sort((a, b) => b.activeTime - a.activeTime).slice(0, 20);
+
+  const tabInfo = sortedTabs
     .map((t) => `- [${t.id}] ${t.title} (${t.url}) [${Math.round(t.activeTime / 60000)}min, ${Math.round(t.scrollPercentage)}% scrolled]`)
     .join('\n');
+
+  const fullyReadTabs = sortedTabs
+    .filter((t) => t.scrollPercentage >= 90)
+    .map((t) => `- ${t.title} (${t.url})`);
 
   const notesInfo = sessionData.notes
     .slice(0, 10)
@@ -187,8 +191,10 @@ export async function generateNextSteps(sessionData: {
 - Notes with TODO items or questions
 - Research that seems incomplete
 - Documents that were being drafted
+- For pages that were FULLY READ (90%+ scroll), suggest 1-3 specific related websites or resources they should check next to go deeper on that topic
 
-Return JSON: {"steps": [{"step": "action description", "reasoning": "why this matters", "relatedTabIds": ["id1"]}]}`,
+Return JSON: {"steps": [{"step": "action description", "reasoning": "why this matters", "relatedTabIds": ["id1"], "suggestedUrls": ["https://example.com"]}]}
+Only include suggestedUrls for steps where visiting a specific URL would be genuinely helpful. Use real, well-known websites relevant to the topic. Leave suggestedUrls as [] if not applicable.`,
       },
       {
         role: 'user',
@@ -198,20 +204,27 @@ ${sessionData.summary ? `Previous summary: ${sessionData.summary}` : ''}
 Tabs (with scroll progress):
 ${tabInfo}
 
+${fullyReadTabs.length > 0 ? `\nFully read pages (90%+ scrolled — suggest follow-up resources for these):\n${fullyReadTabs.join('\n')}` : ''}
+
 ${notesInfo ? `Notes:\n${notesInfo}` : ''}
 
 ${sessionData.clipboardEntries.length > 0 ? `Clipboard entries: ${sessionData.clipboardEntries.length} items saved` : ''}`,
       },
     ],
     response_format: { type: 'json_object' },
-    max_tokens: 600,
+    max_tokens: 800,
     temperature: 0.4,
   });
 
   try {
     const content = response.choices[0]?.message?.content || '{"steps":[]}';
     const parsed = JSON.parse(content);
-    return parsed.steps || [];
+    return (parsed.steps || []).map((s: any) => ({
+      step: s.step || '',
+      reasoning: s.reasoning || '',
+      relatedTabIds: Array.isArray(s.relatedTabIds) ? s.relatedTabIds : [],
+      suggestedUrls: Array.isArray(s.suggestedUrls) ? s.suggestedUrls : [],
+    }));
   } catch {
     return [];
   }

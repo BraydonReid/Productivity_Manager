@@ -1,5 +1,15 @@
 import { SCROLL_DEBOUNCE_MS } from '../shared/constants';
 
+// Capture copy events immediately and forward to background for saving
+document.addEventListener('copy', (e) => {
+  const text = e.clipboardData?.getData('text/plain');
+  if (!text || !text.trim()) return;
+  chrome.runtime.sendMessage({
+    type: 'CLIPBOARD_CAPTURED',
+    payload: { content: text.trim(), sourceUrl: window.location.href },
+  }).catch(() => {});
+});
+
 let sidebarVisible = false;
 let sidebarContainer: HTMLDivElement | null = null;
 

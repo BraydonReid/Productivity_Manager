@@ -2,16 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearAuth, getAuthEmail } from '../../shared/auth';
 import { getTheme, setTheme, type Theme } from '../../shared/theme';
+import { STORAGE_KEYS } from '../../shared/constants';
 
 export default function Settings() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [signingOut, setSigningOut] = useState(false);
   const [theme, setThemeState] = useState<Theme>('dark');
+  const [autoCollapseGroups, setAutoCollapseGroups] = useState(false);
 
   useEffect(() => {
     getAuthEmail().then((e) => setEmail(e || ''));
     getTheme().then(setThemeState);
+    chrome.storage.local.get(STORAGE_KEYS.AUTO_COLLAPSE_GROUPS).then((stored) => {
+      setAutoCollapseGroups(Boolean(stored[STORAGE_KEYS.AUTO_COLLAPSE_GROUPS]));
+    });
   }, []);
 
   async function handleSignOut() {
@@ -24,6 +29,12 @@ export default function Settings() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
     await setTheme(next);
     setThemeState(next);
+  }
+
+  async function handleAutoCollapseToggle() {
+    const next = !autoCollapseGroups;
+    await chrome.storage.local.set({ [STORAGE_KEYS.AUTO_COLLAPSE_GROUPS]: next });
+    setAutoCollapseGroups(next);
   }
 
   return (
@@ -64,6 +75,35 @@ export default function Settings() {
                   Dark Mode
                 </>
               )}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Tab Behaviour */}
+      <section className="mb-6">
+        <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Tab Behaviour</h3>
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-gray-900 dark:text-white">Auto-collapse inactive groups</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Automatically collapse tab groups that don't contain the active tab
+              </div>
+            </div>
+            <button
+              onClick={handleAutoCollapseToggle}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                autoCollapseGroups ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+              }`}
+              role="switch"
+              aria-checked={autoCollapseGroups}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                  autoCollapseGroups ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
             </button>
           </div>
         </div>

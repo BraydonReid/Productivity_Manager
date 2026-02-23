@@ -18,4 +18,5 @@ export const STORAGE_KEYS = {
   LAST_CLIPBOARD: 'lastClipboardContent',
   AUTH_TOKEN: 'authToken',
   AUTH_EMAIL: 'authEmail',
+  AUTO_COLLAPSE_GROUPS: 'autoCollapseGroups',
 } as const;

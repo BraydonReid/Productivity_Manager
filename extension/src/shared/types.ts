@@ -157,6 +157,7 @@ export interface NextStep {
   step: string;
   reasoning: string;
   relatedTabIds: string[];
+  suggestedUrls: string[];
   isCompleted: boolean;
   generatedAt: string;
 }

@@ -41,6 +41,24 @@ export async function checkClipboard(currentSessionId: string | null): Promise<v
   }
 }
 
+// Called immediately when a copy event is captured by the content script
+export async function saveClipboardEntry(content: string, sourceUrl: string | null, sessionId: string): Promise<void> {
+  const text = content.substring(0, 5000);
+  // Update stored clipboard to prevent the periodic check from saving a duplicate
+  await chrome.storage.local.set({ [STORAGE_KEYS.LAST_CLIPBOARD]: text });
+
+  const entry = {
+    id: uuid(),
+    sessionId,
+    content: text,
+    sourceUrl,
+    capturedAt: new Date().toISOString(),
+    contentType: detectContentType(text),
+  };
+
+  await postToServer('/clipboard', entry);
+}
+
 function detectContentType(text: string): string {
   if (/^https?:\/\//.test(text.trim())) return 'url';
   if (/[{}\[\]();]/.test(text) && /\n/.test(text)) return 'code';

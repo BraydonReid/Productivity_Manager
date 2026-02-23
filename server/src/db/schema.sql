@@ -96,9 +96,12 @@ CREATE TABLE IF NOT EXISTS next_steps (
   step TEXT NOT NULL,
   reasoning TEXT,
   related_tab_ids TEXT DEFAULT '[]',
+  suggested_urls TEXT DEFAULT '[]',
   is_completed BOOLEAN DEFAULT FALSE,
   generated_at TEXT NOT NULL
 );
+-- Add column to existing databases that predate this field
+ALTER TABLE next_steps ADD COLUMN IF NOT EXISTS suggested_urls TEXT DEFAULT '[]';
 
 CREATE TABLE IF NOT EXISTS focus_sessions (
   id TEXT PRIMARY KEY,
